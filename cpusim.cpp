@@ -63,7 +63,7 @@ int main (int argc, char* argv[])
 	}
 
 	// Print info
-    myCPU.printInfo();
+    //myCPU.printInfo();
 
 	// Prints (a0,a1)
 	myCPU.printResult();

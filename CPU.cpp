@@ -25,9 +25,18 @@ CPU::CPU(vector<uint8_t> &&iMem) : instrMem(move(iMem)){
     lwCount = 0;
     totalInstrCount = 0;
     ipc = 0;
+
+    //cout << "bitset practice: " << endl;
+    //bitset<12> b = -8;   //b stores -1
+    //cout << b << endl;
+    //cout << (~b).to_ulong() + 1 << endl;
+    /*int32_t a = -8;
+    bitset<12>c(a);
+    cout << c << endl;*/
 }
 
 void CPU::Fetch() {
+
     // Fetch one instruction from the program memory in little endian form.
     if (PC + 3 < instrMem.size()) {
         uint32_t byte1 = instrMem[PC];
@@ -332,10 +341,35 @@ bool CPU::isFinished() {
 }
 
 void CPU::printInfo() {
-    cout << "(" << reg[10] << ", " << reg[11] << ")" << endl;
+    cout << "(" << reg[10] << "," << reg[11] << ")" << endl;
     cerr << "Total number of clock cycles: " << clockCount << endl;
     cerr << "Total r-type instructions run: " << rTypeCount << endl;
     cerr << "IPC: " << ipc << endl;
 }
 
-void CPU::printResult() { cout << "(" << reg[10] << "," << reg[11] << ")"<<endl; }
+void CPU::printResult() {
+    bitset<8>a0(reg[10]);
+    bitset<8>a1(reg[11]);
+
+    bool a0Neg = false;
+    bool a1Neg = false;
+    if (a0[7] == 1) {
+        a0Neg = true;
+    }
+    if (a1[7] == 1) {
+        a1Neg = true;
+    }
+
+    if (a0Neg && !a1Neg) {
+        cout << "(-" << (~a0).to_ulong() + 1 << "," << a1.to_ulong() << ")" << endl;
+    }
+    else if (!a0Neg && a1Neg) {
+        cout << "(" << a0.to_ulong() << ",-" << (~a1).to_ulong() + 1 << ")" << endl;
+    }
+    else if (a0Neg && a1Neg) {
+        cout << "(-" << (~a0).to_ulong() + 1 << ",-" << (~a1).to_ulong() + 1 << ")" << endl;
+    }
+    else {
+        cout << "(" << a0.to_ulong() << "," << a1.to_ulong() << ")" << endl;
+    }
+}

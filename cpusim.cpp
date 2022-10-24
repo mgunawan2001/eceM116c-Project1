@@ -7,67 +7,66 @@
 #include <string>
 #include<fstream>
 #include <sstream>
+#include <vector>
 using namespace std;
 
-/* 
-Add all the required standard and developed libraries here. 
-Remember to include all those files when you are submitting the project. 
-*/
-#include <cstdint>
-#include <vector>
-#include <algorithm>
-#include <iterator>
-
-/*
-Put/Define any helper function/definitions you need here
-*/
 
 
-int main (int argc, char* argv[]) // your project should be executed like this: ./cpusim filename.txt and should print (a0,a1) 
+int main (int argc, char* argv[]) 
 {
 	// Checks for correct number of arguments
 	if (argc < 2) {
-		//cout << "No file name entered. Exiting...";
+		cout << "No file name entered. Exiting...";
 		return -1;
 	}
 
-	ifstream infile(argv[1]); //open the file
+	// Open file
+	ifstream infile(argv[1]); 
+	
+	// Check file can be opened
 	if (!(infile.is_open() && infile.good())) {
 		cout << "error opening file\n";
 		return 0;
 	}
 
-	// This creates a vector for the instruction memory bytes and then uses std iterators to copy each line of the file.
-	// I read them in as uint16_t and then copy them as uint8_t. The reason this is necessary is because uint8_t would
-	// be read as a char and only grab one digit of each numbers at a time.
-	vector<uint8_t> instMem;
-    istream_iterator<uint16_t> input(infile);
-    copy(input, istream_iterator<uint16_t>(), back_inserter(instMem));
+	// Initialize Instruction Memory
+	vector<uint8_t> instrMem;
 
-    // This vector is for the data memory. Size is set for 4096 bytes.
-    vector<uint8_t> dataMem (4096, 0x0);
+	// Add instructions to Instruction Memory vector
+	string line;
+	while (infile) {
+		infile >> line;
+		stringstream line2(line);
+		int x;
+		line2 >> x;
+		instrMem.push_back(bitset<8>(x).to_ulong());
+	}
 
-	// Instantiate CPU object
-    auto myCPU = CPU(move(instMem), move(dataMem));
+	//Initialize CPU
+	auto myCPU = CPU(move(instrMem));
 
-	while (true) // processor's main loop. Each iteration is equal to one clock cycle.
+	// Run 'Processor'. 1 iteration = 1 clock cycle
+	while (true) 
 	{
 		// 5 stages
-		myCPU.fetch();
-		myCPU.decode();
-        myCPU.execute();
-        myCPU.memory();
-        myCPU.writeback();
+		myCPU.Fetch();
+		myCPU.Decode();
+        myCPU.Execute();
+        myCPU.Memory();
+        myCPU.Writeback();
 
-		//end one clock cycle
+		// End one clock cycle
         myCPU.clockTick();
 
-		// Break the loop if ALL instructions in the pipeline has opcode==0 instruction
+		// Break the loop if ALL instructions have been executed (all instruction have ZERO opcode)
 		if (myCPU.isFinished()) { break; }
 	}
 
-	// print the stats
-    myCPU.printStats();
+	// Print info
+    myCPU.printInfo();
+
+	// Prints (a0,a1)
+	myCPU.printResult();
 
 	exit(0);
 }

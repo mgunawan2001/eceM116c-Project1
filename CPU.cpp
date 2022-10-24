@@ -24,24 +24,20 @@ void CPU::fetch() {
         uint32_t byte3 = insMem[pc + 2];
         uint32_t byte4 = insMem[pc + 3];
 
-//        cout << "<<<PC = " << pc << ">>>" << endl;
-
-        // Concatenate them into a single 32 bit instruction in big endian form.
-        ifidNext.instruction = (byte4 << 24) + (byte3 << 16) + (byte2 << 8) + byte1;
+        ifidCurr.instruction = (byte4 << 24) + (byte3 << 16) + (byte2 << 8) + byte1;
     }
     else {
-        ifidNext.instruction = ZERO;
+        ifidCurr.instruction = ZERO;
     }
-    ifidNext.pc = pc;
+    ifidCurr.pc = pc;
 
     // Ensures we can track 5 sequential NOPs
-    if (ZERO == (ifidNext.instruction & 0x7fff)) { ++killCounter; }
+    if (ZERO == (ifidCurr.instruction & 0x7fff)) { ++killCounter; }
     else { killCounter = 0; }
 
-//    // Debug printing TODO: remove me
-    bitset<32> x(ifidNext.instruction);
+
+    //bitset<32> x(ifidCurr.instruction);
     cout << "start of clock tick " << clockCount << ":" << endl;
-    //cout << "     > " << x << endl;
 }
 
 void CPU::decode() {
@@ -53,107 +49,126 @@ void CPU::decode() {
     uint32_t rs2 = (ifidCurr.instruction >> 20) & 0x1f;
 
     // Update the IDEX struct
-    idexNext.pc = ifidCurr.pc;
-    idexNext.readData1 = registerFile[rs1];
-    idexNext.readData2 = registerFile[rs2];
-    idexNext.rd = (ifidCurr.instruction >> 7) & 0x1f;
-    idexNext.immediate = (int32_t) ifidCurr.instruction >> 20;  // Performs sign extension
+    idexCurr.pc = ifidCurr.pc;
+    idexCurr.readData1 = registerFile[rs1];
+    idexCurr.readData2 = registerFile[rs2];
+    idexCurr.rd = (ifidCurr.instruction >> 7) & 0x1f;
+    idexCurr.immediate = (int32_t) ifidCurr.instruction >> 20;  // Performs sign extension
 
     // RTYPE operation
     if (RTYPE == opcode) {
         ++rTypeCount;
         if (0x0 == func3) {
-            if (0x0 == func7) { idexNext.operation = Op::ADD; }
-            else if (0x20 == func7) { idexNext.operation = Op::SUB; }
-            else { idexNext.operation = Op::ERROR; }  // Unrecognized opcode
+            if (0x0 == func7) { idexCurr.operation = Op::ADD; }
+            else if (0x20 == func7) { idexCurr.operation = Op::SUB; }
+            else { idexCurr.operation = Op::ERROR; }  // Unrecognized opcode
         }
-        else if (0x4 == func3) { idexNext.operation = Op::XOR; }
-        else if (0x5 == func3) { idexNext.operation = Op::SRA; }
-        else if (0x6 == func3) { idexNext.operation = Op::OR; }
-        else if (0x7 == func3) { idexNext.operation = Op::AND; }
-        else { idexNext.operation = Op::ERROR; }  // Unrecognized opcode
+        else if (0x4 == func3) { idexCurr.operation = Op::XOR; }
+        else if (0x5 == func3) { idexCurr.operation = Op::SRA; }
+        else if (0x6 == func3) { idexCurr.operation = Op::OR; }
+        else if (0x7 == func3) { idexCurr.operation = Op::AND; }
+        else { idexCurr.operation = Op::ERROR; }  // Unrecognized opcode
     }
     // ITYPE operation
     else if (ITYPE == opcode) {
         ++iTypeCount;
-        if (0x0 == func3) { idexNext.operation = Op::ADDI; }
-        else if (0x6 == func3) { idexNext.operation = Op::ORI; }
-        else if (0x7 == func3) { idexNext.operation = Op::ANDI; }
-        else { idexNext.operation = Op::ERROR; }  // Unrecognized opcode
+        if (0x0 == func3) { idexCurr.operation = Op::ADDI;}
+        else if (0x6 == func3) { idexCurr.operation = Op::ORI; }
+        else if (0x7 == func3) { idexCurr.operation = Op::ANDI; }
+        else { idexCurr.operation = Op::ERROR; }  // Unrecognized opcode
+    }
+    // BTYPE operation
+    else if (opcode == BTYPE) {
+        ++bTypeCount;
+        //immediate
+        auto imm11_5 = (int32_t)(ifidCurr.instruction & 0xfe000000);
+        auto imm4_0 = (int32_t)((ifidCurr.instruction & 0xf80) << 13); 
+        idexCurr.immediate = (imm11_5 + imm4_0) >> 20; // Redefined for SW
+
+        if (0x4 == func3) { idexCurr.operation = Op::BLT; }
+        else { idexCurr.operation = Op::ERROR; }  // Unrecognized opcode
+    }
+    // JTYPE operation
+    else if (opcode == JTYPE) {
+        cout << "jalr! " << endl;
+        ++jTypeCount;
+        idexCurr.operation = Op::JALR;
     }
     // LW operation
     else if (LOADWORD == opcode && 0x2 == func3) {
         ++lwCount;
-        idexNext.operation = Op::LW; }
+        idexCurr.operation = Op::LW; }
     // SW operation
     else if (STOREWORD == opcode && 0x2 == func3) {
+        cout << "storeword! " << endl;
         ++swCount;
         auto imm11_5 = (int32_t) (ifidCurr.instruction & 0xfe000000);
         auto imm4_0 = (int32_t) ((ifidCurr.instruction & 0xf80) << 13);
-        idexNext.immediate = (imm11_5 + imm4_0) >> 20; // Redefined for SW
-        idexNext.operation = Op::SW;
+        idexCurr.immediate = (imm11_5 + imm4_0) >> 20; // Redefined for SW
+        idexCurr.operation = Op::SW;
     }
     // ZERO op code
-    else if (ZERO == opcode) { idexNext.operation = Op::ZE; }
-    else { idexNext.operation = Op::ERROR; }  // Unrecognized opcode
+    else if (ZERO == opcode) { idexCurr.operation = Op::ZE; }
+    else { idexCurr.operation = Op::ERROR; }  // Unrecognized opcode
 }
 
 void CPU::execute() {
     // Update the EXMEM struct
-    exmemNext.pc = idexCurr.pc;
-    exmemNext.operation = idexCurr.operation;
-    exmemNext.readData2 = idexCurr.readData2;
-    exmemNext.rd = idexCurr.rd;
+    exmemCurr.pc = idexCurr.pc;
+    exmemCurr.operation = idexCurr.operation;
+    exmemCurr.readData2 = idexCurr.readData2;
+    exmemCurr.rd = idexCurr.rd;
+
     switch(idexCurr.operation) {
         case Op::ADD:
-            exmemNext.aluResult = idexCurr.readData1 + idexCurr.readData2;
-            cout << "add: " << idexCurr.readData1 << " + " << idexCurr.readData2 << " = " << exmemNext.aluResult<<endl;
+            exmemCurr.aluResult = idexCurr.readData1 + idexCurr.readData2;
+            cout << "add: " << idexCurr.readData1 << " + " << idexCurr.readData2 << " = " << exmemCurr.aluResult<<endl;
             break;
 
         case Op::SUB:
-            exmemNext.aluResult = idexCurr.readData1 - idexCurr.readData2;
-            cout << "sub: " << idexCurr.readData1 << " - " << idexCurr.readData2 << " = " << exmemNext.aluResult<<endl;
+            exmemCurr.aluResult = idexCurr.readData1 - idexCurr.readData2;
+            cout << "sub: " << idexCurr.readData1 << " - " << idexCurr.readData2 << " = " << exmemCurr.aluResult<<endl;
             break;
 
         case Op::OR:
-            exmemNext.aluResult = idexCurr.readData1 | idexCurr.readData2;
+            exmemCurr.aluResult = idexCurr.readData1 | idexCurr.readData2;
             break;
 
         case Op::AND:
-            exmemNext.aluResult = idexCurr.readData1 & idexCurr.readData2;
+            exmemCurr.aluResult = idexCurr.readData1 & idexCurr.readData2;
             break;
 
         case Op::ADDI:
-            exmemNext.aluResult = idexCurr.readData1 + idexCurr.immediate;
-            cout << "addi: " << idexCurr.readData1 << "+" << idexCurr.immediate << "=" << exmemNext.aluResult << endl;
+            exmemCurr.aluResult = idexCurr.readData1 + idexCurr.immediate;
+            cout << "addi: " << idexCurr.readData1 << "+" << idexCurr.immediate << "=" << exmemCurr.aluResult << endl;
             break;
 
         case Op::ORI:
-            exmemNext.aluResult = idexCurr.readData1 | idexCurr.immediate;
+            exmemCurr.aluResult = idexCurr.readData1 | idexCurr.immediate;
             break;
 
         case Op::ANDI:
-            exmemNext.aluResult = idexCurr.readData1 & idexCurr.immediate;
+            exmemCurr.aluResult = idexCurr.readData1 & idexCurr.immediate;
             break;
         
         case Op::XOR:
-            exmemNext.aluResult = ~(idexCurr.readData1 & idexCurr.readData2) & ~(~idexCurr.readData1 & ~idexCurr.readData2);
-            cout << "xor: " << idexCurr.readData1 << " xor " << idexCurr.immediate << "=" << exmemNext.aluResult << endl;
+            exmemCurr.aluResult = ~(idexCurr.readData1 & idexCurr.readData2) & ~(~idexCurr.readData1 & ~idexCurr.readData2);
+            cout << "xor: " << idexCurr.readData1 << " xor " << idexCurr.immediate << "=" << exmemCurr.aluResult << endl;
             break;
 
         case Op::SRA:
-            exmemNext.aluResult = idexCurr.readData1 < 0 ? ~(~idexCurr.readData1 >> idexCurr.readData2) : idexCurr.readData1 >> idexCurr.readData2;
-            cout << "sra: " << idexCurr.readData1 << " sra " << idexCurr.immediate << "=" << exmemNext.aluResult << endl;
+            exmemCurr.aluResult = idexCurr.readData1 < 0 ? ~(~idexCurr.readData1 >> idexCurr.readData2) : idexCurr.readData1 >> idexCurr.readData2;
+            cout << "sra: " << idexCurr.readData1 << " sra " << idexCurr.immediate << "=" << exmemCurr.aluResult << endl;
 
             break;
 
         case Op::LW:  // Does the same as SW for the ALU result
         case Op::SW:
-            exmemNext.aluResult = idexCurr.readData1 + idexCurr.immediate;
+            exmemCurr.aluResult = idexCurr.readData1 + idexCurr.immediate;
             break;
 
         case Op::ZE:
-            exmemNext.aluResult = ZERO;
+            exmemCurr.aluResult = ZERO;
             break;
 
         case Op::ERROR:
@@ -163,9 +178,10 @@ void CPU::execute() {
 
 void CPU::memory() {
     // Update the MEMWB struct
-    memwbNext.rd = exmemCurr.rd;
-    memwbNext.aluResult = exmemCurr.aluResult;
-    memwbNext.operation = exmemCurr.operation;
+    memwbCurr.rd = exmemCurr.rd;
+    memwbCurr.aluResult = exmemCurr.aluResult;
+    memwbCurr.operation = exmemCurr.operation;
+
 
     int32_t lByte1, lByte2, lByte3, lByte4;
     uint8_t sByte1, sByte2, sByte3, sByte4;
@@ -178,7 +194,7 @@ void CPU::memory() {
             lByte4 = dataMem[exmemCurr.aluResult + 3];
 
             // Convert to big endian and store as the aluResult
-            memwbNext.memData = (lByte4 << 24) + (lByte3 << 16) + (lByte2 << 8) + lByte1;
+            memwbCurr.memData = (lByte4 << 24) + (lByte3 << 16) + (lByte2 << 8) + lByte1;
             break;
 
         case Op::SW:
@@ -206,21 +222,43 @@ void CPU::writeback() {
     }  // Don't overwrite x0 ever! Also, SW doesn't write to a register.
     if (Op::LW == memwbCurr.operation) {
         registerFile[memwbCurr.rd] = memwbCurr.memData; }
+    
     else if (Op::ERROR != memwbCurr.operation) { registerFile[memwbCurr.rd] = memwbCurr.aluResult; }
-    cout << "r1: " << registerFile[1] << " r2: " << registerFile[2] << " r3: " << registerFile[3] << " r4: " << registerFile[4] << " r5: " << registerFile[5] << " r6: " << registerFile[6] << " r7: " << registerFile[7] << " r8: " << registerFile[8] << " r9: " << registerFile[9] << " r10: " << registerFile[10] << " r11: " << registerFile[11] << endl;
-}
+    }
 
 
 void CPU::clockTick() {
-    cout << "end of clocktick: " << clockCount << endl;
-    cout<<endl;
-    
-    pc += 4;  // No branching or jumps in this version
     ++clockCount;
-    ifidCurr = ifidNext;
+    //cout << "pc: " << pc << endl;
+
+    if (Op::BLT == memwbCurr.operation) {
+        cout << idexCurr.readData1 << " <= " << idexCurr.readData2 << " imm: " << idexCurr.immediate << endl;
+        if (idexCurr.readData1 <= idexCurr.readData2) {
+            pc += idexCurr.immediate;
+            cout << " immediate: " << idexCurr.immediate << " new pc: " << pc << endl;
+        }
+        else { pc += 4; }
+    }
+    if (memwbCurr.operation == Op::JALR) {
+        cout << "jalr rd: " << idexCurr.rd << endl;
+        registerFile[memwbCurr.rd] = pc+4;
+        pc = idexCurr.readData1 + idexCurr.immediate;
+    }
+    else if ((memwbCurr.operation != Op::BLT) && (memwbCurr.operation != Op::JALR)) {
+        pc += 4;  // No branching or jumps in this version
+    }
+    cout << "r1: " << registerFile[1] << " r2: " << registerFile[2] << " r3: " << registerFile[3] << " r4: " << registerFile[4] << " r5: " << registerFile[5] << " r6: " << registerFile[6] << " r7: " << registerFile[7] << " r8: " << registerFile[8] << " r9: " << registerFile[9] << " r10: " << registerFile[10] << " r11: " << registerFile[11] << endl;
+
+    
+    cout << "end of clocktick: " << clockCount << endl;
+    cout << endl;
+
+   
+    /*ifidCurr = ifidNext;
     idexCurr = idexNext;
     exmemCurr = exmemNext;
-    memwbCurr = memwbNext;
+    memwbCurr = memwbNext;*/
+    return;
     
 }
 

@@ -13,6 +13,8 @@
 #define ITYPE 0x13
 #define LOADWORD 0x3
 #define STOREWORD 0x23
+#define BTYPE 0x63
+#define JTYPE 0x67
 
 
 class CPU {
@@ -138,6 +140,8 @@ private:
     unsigned int clockCount;        // Number of clock cycles executed
     unsigned int rTypeCount;        // Number of r-type instructions executed
     unsigned int iTypeCount;        // Number of i-type instructions executed
+    unsigned int bTypeCount;
+    unsigned int jTypeCount;
     unsigned int swCount;           // Number of SW instructions executed
     unsigned int lwCount;           // Number of LW instructions executed
     unsigned int totalInsCount;     // Total instruction count
@@ -157,7 +161,10 @@ private:
         LW,
         SW,
         XOR,
-        SRA
+        SRA,
+
+        BLT,
+        JALR
     };
 
     // Information representing the register block between the Instruction

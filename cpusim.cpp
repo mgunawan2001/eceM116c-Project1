@@ -31,8 +31,8 @@ int main (int argc, char* argv[]) // your project should be executed like this: 
 		return -1;
 	}
 
-	ifstream ifs(argv[1]); //open the file
-	if (!(ifs.is_open() && ifs.good())) {
+	ifstream infile(argv[1]); //open the file
+	if (!(infile.is_open() && infile.good())) {
 		cout << "error opening file\n";
 		return 0;
 	}
@@ -41,7 +41,7 @@ int main (int argc, char* argv[]) // your project should be executed like this: 
 	// I read them in as uint16_t and then copy them as uint8_t. The reason this is necessary is because uint8_t would
 	// be read as a char and only grab one digit of each numbers at a time.
 	vector<uint8_t> instMem;
-    istream_iterator<uint16_t> input(ifs);
+    istream_iterator<uint16_t> input(infile);
     copy(input, istream_iterator<uint16_t>(), back_inserter(instMem));
 
     // This vector is for the data memory. Size is set for 4096 bytes.
@@ -52,22 +52,14 @@ int main (int argc, char* argv[]) // your project should be executed like this: 
 
 	while (true) // processor's main loop. Each iteration is equal to one clock cycle.
 	{
-		//fetch
+		// 5 stages
 		myCPU.fetch();
-
-		// decode
 		myCPU.decode();
-
-		// execute
         myCPU.execute();
-
-		// memory
         myCPU.memory();
-
-		// writeback
         myCPU.writeback();
 
-		// _next values should be written to _current values here:
+		//end one clock cycle
         myCPU.clockTick();
 
 		// Break the loop if ALL instructions in the pipeline has opcode==0 instruction
